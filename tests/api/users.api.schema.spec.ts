@@ -48,7 +48,7 @@ test('GET -- get a user', async ({ apiHelper }) => {
 
     let userData = {
         name: "schema test",
-        email: `automation_${Date.now()}@open.com`,
+        email: `automation_${Date.now()}_${Math.floor(Math.random() * 100000)}@open.com`, //random suffix: parallel workers can hit the same ms
         gender: "male",
         status: "active"
         };

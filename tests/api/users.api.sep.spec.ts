@@ -24,7 +24,7 @@ test('POST API -- create a users', async ({ apiHelper }) => {
     //JS Object
     let userData = {
         name: "prince API",
-        email: `automation_${Date.now()}@open.com`,
+        email: `automation_${Date.now()}_${Math.floor(Math.random() * 100000)}@open.com`, //random suffix: parallel workers can hit the same ms
         gender: "male",
         status: "active"
     };
