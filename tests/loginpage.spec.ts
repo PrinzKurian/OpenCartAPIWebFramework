@@ -1,15 +1,18 @@
 import {test, expect} from '@playwright/test';
 import { LoginPage } from '../src/pages/LoginPage';
 import { HomePage } from '../src/pages/HomePage';
+import { BasePage } from '../src/pages/BasePage';
 
 
 let loginPage: LoginPage;
-let homePage: HomePage;
+    let homePage: HomePage;
+    let basePage: BasePage;
 
 //Implementing hooks
 test.beforeEach(async ({ page  }) => {
     loginPage = new LoginPage(page);
     homePage = new HomePage(page);
+    basePage = new BasePage(page);
     await loginPage.goToLoginPage();
 });
 
@@ -26,5 +29,5 @@ test('forgot psw link test', async () => {
 test('user is able to login the app test', async () => {
     await loginPage.doLogin(process.env.APP_USERNAME!, process.env.APP_PASSWORD!);
     expect.soft(await homePage.islogoutLinkExist()).toBeTruthy();
-    expect.soft(await homePage.getHomePageTitle()).toBe("My Account");
+    expect.soft(await basePage.getPageTitle()).toBe("My Account");
 });

@@ -1,21 +1,25 @@
 import {test, expect} from '@playwright/test';
 import { LoginPage } from '../src/pages/LoginPage';
 import { HomePage } from '../src/pages/HomePage';
+import { BasePage } from '../src/pages/BasePage';
+
 
 let loginPage: LoginPage;
 let homePage: HomePage;
-
+let basePage: BasePage;
 //Implementing hooks
 test.beforeEach(async ({ page }) => {
     loginPage = new LoginPage(page);
     await loginPage.goToLoginPage();
+    
     await loginPage.doLogin('pwtestbatch@open.com', 'pw123');
     homePage = new HomePage(page);
+    basePage = new BasePage(page);
 });
 
 
 test('home page title test', async () => {
-    const pageTitle = await homePage.getHomePageTitle();
+    const pageTitle = await basePage.getPageTitle();
     console.log('home page title : ', pageTitle);
     expect(pageTitle).toBe("My Account");
 });
