@@ -1,0 +1,4 @@
+fake json response:  [
+  { name: 'Fake MacBook Pro', price: '$500.00' },
+  { name: 'Fake iphone 20', price: '$999' }
+]

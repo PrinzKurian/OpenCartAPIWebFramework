@@ -1,0 +1,74 @@
+[
+  {
+    id: 8699780,
+    name: 'schema test',
+    email: 'automation_1793799860730_49860@open.com',
+    gender: 'male',
+    status: 'active'
+  },
+  {
+    id: 8699778,
+    name: 'prince API updated',
+    email: 'automation_1793799859778_41909@open.com',
+    gender: 'male',
+    status: 'inactive'
+  },
+  {
+    id: 8699777,
+    name: 'prince API',
+    email: 'automation_1793799859088_19731@open.com',
+    gender: 'male',
+    status: 'active'
+  },
+  {
+    id: 8698937,
+    name: 'Atharv Patel',
+    email: 'atharv_patel_92747@iyer.example',
+    gender: 'male',
+    status: 'active'
+  },
+  {
+    id: 8698934,
+    name: 'Vivaan Reddy',
+    email: 'vivaan_reddy_47557@menon.example',
+    gender: 'male',
+    status: 'inactive'
+  },
+  {
+    id: 8698932,
+    name: 'Vivaan Rao',
+    email: 'vivaan_rao_45862@iyer.example',
+    gender: 'male',
+    status: 'active'
+  },
+  {
+    id: 8698931,
+    name: 'Arjun Gupta',
+    email: 'arjun_gupta_78899@verma.example',
+    gender: 'male',
+    status: 'active'
+  },
+  {
+    id: 8698930,
+    name: 'Kabir Kulkarni',
+    email: 'kabir_kulkarni_58019@gupta.example',
+    gender: 'male',
+    status: 'inactive'
+  },
+  {
+    id: 8698929,
+    name: 'Tara Menon',
+    email: 'tara_menon_91079@agarwal.example',
+    gender: 'female',
+    status: 'inactive'
+  },
+  {
+    id: 8698928,
+    name: 'Sai Mishra',
+    email: 'sai_mishra_22265@patel.example',
+    gender: 'male',
+    status: 'active'
+  }
+]
+200
+OK
