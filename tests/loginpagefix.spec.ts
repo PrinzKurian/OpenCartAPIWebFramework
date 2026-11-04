@@ -9,7 +9,7 @@ test.beforeEach(async ({ loginPage, homePage  }) => {
     await loginPage.goToLoginPage();
 });
 
-test('login page title test', async ({ loginPage }) => {
+test('@smoke  login page title test', async ({ loginPage }) => {
     const pageTitle = await loginPage.getLoginPageTitile();
     console.log('login page title', pageTitle);
     expect(pageTitle).toBe("Account Login");
@@ -19,14 +19,14 @@ test('forgot psw link test', async ({ loginPage }) => {
     expect(await loginPage.isForgotPwdLinkExist()).toBeTruthy();
 });
 
-test('user is able to login the app test', async ({ loginPage, homePage}) => {
+test('@smoke  user is able to login the app test', async ({ loginPage, homePage}) => {
     await loginPage.doLogin(process.env.APP_USERNAME!, process.env.APP_PASSWORD!);
     expect.soft(await homePage.islogoutLinkExist()).toBeTruthy();
     expect.soft(await homePage.getPageTitle()).toBe("My Account");
     
 });
 //DD_Approach 1. sequence mode -- only 1 test is running with test data one by one using testdata from the fixture.
-test('login to app using wrong credentials with Data driven test', async ({ loginPage, testData}) => {
+test( '@sanity login to app using wrong credentials with Data driven test', async ({ loginPage, testData}) => {
     for(let row of testData) {
         await loginPage.doLogin(row.username, row.password);
         expect(await loginPage.invalidLoginErrorDisplayed()).toBeTruthy();

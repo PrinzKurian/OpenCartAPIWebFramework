@@ -7,17 +7,17 @@ test.beforeEach(async ({ loginPage }) => {
 });
 
 
-test('home page title test', async ({homePage}) => {
+test('@smoke home page title test', async ({homePage}) => {
     const pageTitle = await homePage.getPageTitle();
     console.log('home page title : ', pageTitle);
     expect(pageTitle).toBe("My Account");
 });
 
-test('logout link exist test', async ({homePage}) => {
+test('@regression logout link exist test', async ({homePage}) => {
     expect(await homePage.islogoutLinkExist()).toBeTruthy();
 });
 
-test('home page headers exist test', async ({homePage}) => {
+test('@sanity home page headers exist test', async ({homePage}) => {
     let allHeaders = await homePage.getHomePageHeaders();
     console.log('home page headers : ', allHeaders);
     expect(allHeaders).toHaveLength(4); //No needed to use the soft assertion here. Both are related to the same testcase. If the first is failed doesn't needed to be executed the next
