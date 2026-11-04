@@ -12,7 +12,7 @@ test.beforeEach(async ({ loginPage }) => {
 let productData = CsvHelper.readCsv('src/data/product.csv');
 
 for(const row of productData) {
-    test(`@regression verify search results count - ${row.searchkey}, - ${row.productname}`, async ({homePage, SearchResultsPage}) => {
+    test(`@sanity @regression verify search results count - ${row.searchkey}, - ${row.productname}`, async ({homePage, SearchResultsPage}) => {
         await homePage.doSearch(row.searchkey); 
         expect(await SearchResultsPage.getProductSearchResultsCount()).toBe(Number(row.resultcount));
     });

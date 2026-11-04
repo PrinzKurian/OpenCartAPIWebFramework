@@ -1,6 +1,6 @@
 # ═══════════════════════════════════════════════════════════════
-# FILE: .github/workflows/master-pipeline.yml
-# REPO: naveenanimation20/OpenCartWebAPIFramework
+# FILE: .github/workflows/e2e.yml
+# REPO: PrinzKurian/OpenCartAPIWebFramework (this repo — test jobs check it out)
 # DEV REPO: jglick/simple-maven-project-with-tests
 # ═══════════════════════════════════════════════════════════════
 # "Run up to environment" — the dropdown controls how far the
@@ -9,6 +9,16 @@
 #   QA    → Build → DEV → QA
 #   stage → Build → DEV → QA → STAGE
 #   Prod  → Build → DEV → QA → STAGE → PROD
+#
+# A failed stage skips every stage after it (that is the gate).
+#
+# Test tags:
+#   @smoke  → critical path       → DEV, STAGE, PROD
+#   @sanity → key-feature checks  → DEV, STAGE (together with @smoke)
+#   QA runs the full regression (every test)
+#
+# Secrets each GitHub environment (dev, QA, stage, Prod) needs:
+#   BASE_URL, APP_USERNAME, APP_PASSWORD   (+ API_BASE_URL, API_TOKEN for QA)
 # ═══════════════════════════════════════════════════════════════
 
 name: e2e CI/CD Pipeline
@@ -84,8 +94,6 @@ jobs:
     steps:
       - name: Checkout QA repo
         uses: actions/checkout@v4
-        with:
-          repository:  PrinzKurian/OpenCartAPIWebFramework
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -120,15 +128,18 @@ jobs:
 
       - name: Run Sanity Tests on DEV
         run: |
+          for name in BASE_URL APP_USERNAME APP_PASSWORD; do
+            [ -n "${!name}" ] || { echo "::error::Secret $name is not set for the 'dev' environment"; exit 1; }
+          done
           echo "========================================="
-          echo "  Running SANITY @smoke on DEV"
+          echo "  Running SANITY @smoke + @sanity on DEV"
           echo "========================================="
-          npx playwright test --project=chromium --grep @smoke
+          npx playwright test --project=chromium --grep "@smoke|@sanity"
         env:
           ENV: dev
           BASE_URL: ${{ secrets.BASE_URL }}
-          USERNAME: ${{ secrets.USERNAME }}
-          PASSWORD: ${{ secrets.PASSWORD }}
+          APP_USERNAME: ${{ secrets.APP_USERNAME }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
           OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
@@ -187,8 +198,6 @@ jobs:
     steps:
       - name: Checkout QA repo
         uses: actions/checkout@v4
-        with:
-          repository: naveenanimation20/OpenCartWebAPIFramework
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -223,6 +232,9 @@ jobs:
 
       - name: Run Regression Tests on QA
         run: |
+          for name in BASE_URL APP_USERNAME APP_PASSWORD API_BASE_URL API_TOKEN; do
+            [ -n "${!name}" ] || { echo "::error::Secret $name is not set for the 'QA' environment"; exit 1; }
+          done
           echo "========================================="
           echo "  Running REGRESSION (all tests) on QA"
           echo "========================================="
@@ -230,8 +242,8 @@ jobs:
         env:
           ENV: qa
           BASE_URL: ${{ secrets.BASE_URL }}
-          USERNAME: ${{ secrets.USERNAME }}
-          PASSWORD: ${{ secrets.PASSWORD }}
+          APP_USERNAME: ${{ secrets.APP_USERNAME }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
           OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
@@ -290,8 +302,6 @@ jobs:
     steps:
       - name: Checkout QA repo
         uses: actions/checkout@v4
-        with:
-          repository: naveenanimation20/OpenCartWebAPIFramework
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -326,15 +336,18 @@ jobs:
 
       - name: Run Sanity Tests on STAGE
         run: |
+          for name in BASE_URL APP_USERNAME APP_PASSWORD; do
+            [ -n "${!name}" ] || { echo "::error::Secret $name is not set for the 'stage' environment"; exit 1; }
+          done
           echo "========================================="
-          echo "  Running SANITY @smoke on STAGE"
+          echo "  Running SANITY @smoke + @sanity on STAGE"
           echo "========================================="
-          npx playwright test --project=chromium --grep @smoke
+          npx playwright test --project=chromium --grep "@smoke|@sanity"
         env:
           ENV: stage
           BASE_URL: ${{ secrets.BASE_URL }}
-          USERNAME: ${{ secrets.USERNAME }}
-          PASSWORD: ${{ secrets.PASSWORD }}
+          APP_USERNAME: ${{ secrets.APP_USERNAME }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
           OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
@@ -394,8 +407,6 @@ jobs:
     steps:
       - name: Checkout QA repo
         uses: actions/checkout@v4
-        with:
-          repository: naveenanimation20/OpenCartWebAPIFramework
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -430,6 +441,9 @@ jobs:
 
       - name: Run Smoke Tests on PROD
         run: |
+          for name in BASE_URL APP_USERNAME APP_PASSWORD; do
+            [ -n "${!name}" ] || { echo "::error::Secret $name is not set for the 'Prod' environment"; exit 1; }
+          done
           echo "========================================="
           echo "  Running SMOKE @smoke on PROD"
           echo "========================================="
@@ -437,8 +451,8 @@ jobs:
         env:
           ENV: prod
           BASE_URL: ${{ secrets.BASE_URL }}
-          USERNAME: ${{ secrets.USERNAME }}
-          PASSWORD: ${{ secrets.PASSWORD }}
+          APP_USERNAME: ${{ secrets.APP_USERNAME }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
           OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
@@ -520,8 +534,16 @@ jobs:
             echo "overall=✅ ALL PASSED" >> $GITHUB_OUTPUT
           fi
 
-          REPORT_BASE="https://naveenanimation20.github.io/OpenCartWebAPIFramework/runs/${{ github.run_id }}"
+          REPORT_BASE="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/runs/${{ github.run_id }}"
           echo "report_url=${REPORT_BASE}" >> $GITHUB_OUTPUT
+
+          # Email/Slack are optional — skip them (instead of failing the job) when their secrets aren't set
+          echo "has_email=$([ -n "$EMAIL_USERNAME" ] && [ -n "$EMAIL_PASSWORD" ] && echo true || echo false)" >> $GITHUB_OUTPUT
+          echo "has_slack=$([ -n "$SLACK_WEBHOOK_URL" ] && echo true || echo false)" >> $GITHUB_OUTPUT
+        env:
+          EMAIL_USERNAME: ${{ secrets.EMAIL_USERNAME }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
       - name: Download All Reports
         uses: actions/download-artifact@v4
@@ -631,6 +653,7 @@ jobs:
           keep_files: true
 
       - name: Create HTML Dashboard for Email
+        if: always() && steps.status.outputs.has_email == 'true'
         run: |
           REPORT_URL="${{ steps.status.outputs.report_url }}"
 
@@ -677,9 +700,9 @@ jobs:
                 <table>
                   <tr><th>Stage</th><th>Test Suite</th><th>Status</th></tr>
                   <tr><td class="env-name">🔨 Build</td><td class="test-type">Maven Unit Tests</td><td class="status">${{ steps.status.outputs.build }}</td></tr>
-                  <tr><td class="env-name">🟢 DEV</td><td class="test-type">Sanity (@smoke)</td><td class="status">${{ steps.status.outputs.dev }}</td></tr>
+                  <tr><td class="env-name">🟢 DEV</td><td class="test-type">Sanity (@smoke + @sanity)</td><td class="status">${{ steps.status.outputs.dev }}</td></tr>
                   <tr><td class="env-name">🔵 QA</td><td class="test-type">Regression (All Tests)</td><td class="status">${{ steps.status.outputs.qa }}</td></tr>
-                  <tr><td class="env-name">🟡 STAGE</td><td class="test-type">Sanity (@smoke)</td><td class="status">${{ steps.status.outputs.stage }}</td></tr>
+                  <tr><td class="env-name">🟡 STAGE</td><td class="test-type">Sanity (@smoke + @sanity)</td><td class="status">${{ steps.status.outputs.stage }}</td></tr>
                   <tr><td class="env-name">🔴 PROD</td><td class="test-type">Smoke (@smoke)</td><td class="status">${{ steps.status.outputs.prod }}</td></tr>
                 </table>
               </div>
@@ -698,6 +721,7 @@ jobs:
           DASHBOARD
 
       - name: Send Email with Dashboard
+        if: always() && steps.status.outputs.has_email == 'true'
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.hostinger.com
@@ -711,7 +735,7 @@ jobs:
           html_body: file://dashboard.html
 
       - name: Send Slack Notification
-        if: always()
+        if: always() && steps.status.outputs.has_slack == 'true'
         uses: 8398a7/action-slack@v3
         with:
           status: custom
@@ -729,7 +753,7 @@ jobs:
                 { "type": "divider" },
                 {
                   "type": "section",
-                  "text": { "type": "mrkdwn", "text": "${{ steps.status.outputs.build }}  *Build* — Maven Unit Tests\n${{ steps.status.outputs.dev }}  *DEV* — Sanity (@smoke)\n${{ steps.status.outputs.qa }}  *QA* — Regression (All Tests)\n${{ steps.status.outputs.stage }}  *STAGE* — Sanity (@smoke)\n${{ steps.status.outputs.prod }}  *PROD* — Smoke (@smoke)" }
+                  "text": { "type": "mrkdwn", "text": "${{ steps.status.outputs.build }}  *Build* — Maven Unit Tests\n${{ steps.status.outputs.dev }}  *DEV* — Sanity (@smoke + @sanity)\n${{ steps.status.outputs.qa }}  *QA* — Regression (All Tests)\n${{ steps.status.outputs.stage }}  *STAGE* — Sanity (@smoke + @sanity)\n${{ steps.status.outputs.prod }}  *PROD* — Smoke (@smoke)" }
                 },
                 { "type": "divider" },
                 {
@@ -754,6 +778,7 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
       - name: Pipeline Summary
+        if: always()
         run: |
           echo "═══════════════════════════════════════════"
           echo "       MASTER CI/CD PIPELINE SUMMARY"

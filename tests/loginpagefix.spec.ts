@@ -15,7 +15,7 @@ test('@smoke  login page title test', async ({ loginPage }) => {
     expect(pageTitle).toBe("Account Login");
 });
 
-test('forgot psw link test', async ({ loginPage }) => {
+test('@sanity forgot psw link test', async ({ loginPage }) => {
     expect(await loginPage.isForgotPwdLinkExist()).toBeTruthy();
 });
 

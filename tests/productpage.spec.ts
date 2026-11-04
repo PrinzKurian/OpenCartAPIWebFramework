@@ -10,14 +10,15 @@ test.beforeEach(async ({ loginPage }) => {
 
 let productData = CsvHelper.readCsv('src/data/productlist.csv');
 
-test('company logo exist on product page', async ({ homePage, SearchResultsPage, basePage }) => {
+test('@smoke company logo exist on product page', async ({ homePage, SearchResultsPage, basePage }) => {
     await homePage.doSearch('macbook');
     await SearchResultsPage.selectProduct('MacBook Pro');
-    expect(basePage.isLogoVisible).toBeTruthy();
+    await basePage.waitForPageLoad();
+    expect(await basePage.isLogoVisible()).toBeTruthy();
 })
 
 
-test(`verify product images count`, async ({homePage, SearchResultsPage, productInfoPage}) => {
+test(`@sanity verify product images count`, async ({homePage, SearchResultsPage, productInfoPage}) => {
 
     await homePage.doSearch('macbook');
     await SearchResultsPage.selectProduct('MacBook Pro');
@@ -26,7 +27,7 @@ test(`verify product images count`, async ({homePage, SearchResultsPage, product
     expect(imgCount).toBe(4);
 });
 
-test(`verify product information/Data`, async ({homePage, SearchResultsPage, productInfoPage}) => {
+test(`@sanity verify product information/Data`, async ({homePage, SearchResultsPage, productInfoPage}) => {
 
     await homePage.doSearch('macbook');
     await SearchResultsPage.selectProduct('MacBook Pro');

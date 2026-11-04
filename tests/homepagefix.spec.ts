@@ -13,7 +13,7 @@ test('@smoke home page title test', async ({homePage}) => {
     expect(pageTitle).toBe("My Account");
 });
 
-test('@regression logout link exist test', async ({homePage}) => {
+test('@smoke @regression logout link exist test', async ({homePage}) => {
     expect(await homePage.islogoutLinkExist()).toBeTruthy();
 });
 
