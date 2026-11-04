@@ -1,0 +1,4 @@
+"DESCRIPTION","DURATION IN MS","NAME","PARENT SUITE","START TIME","STATUS","STOP TIME","SUB SUITE","SUITE","TEST CLASS","TEST METHOD"
+"","2090","@smoke home page title test","chromium","2026-11-04","passed","2026-11-04","","homepagefix.spec.ts","",""
+"","1128","@smoke login page title test","chromium","2026-11-04","passed","2026-11-04","","loginpagefix.spec.ts","",""
+"","1110","@smoke user is able to login the app test","chromium","2026-11-04","failed","2026-11-04","","loginpagefix.spec.ts","",""
