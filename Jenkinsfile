@@ -7,10 +7,11 @@
 // which the job checks out into the workspace root.
 //
 // ENVIRONMENT = "run up to environment" (same gate as .github/workflows/e2e.yml):
-//   dev   → Build → DEV
-//   QA    → Build → DEV → QA
+//   Prod  → Build → DEV → QA → STAGE → PROD (default: full pipeline)
 //   stage → Build → DEV → QA → STAGE
-//   Prod  → Build → DEV → QA → STAGE → PROD (manual approval)
+//   QA    → Build → DEV → QA
+//   dev   → Build → DEV
+// PROD always waits for manual approval first ("Yes, Deploy!" or "Abort").
 // A failed stage skips every stage after it.
 //
 // Reports per test stage:
@@ -24,7 +25,7 @@
 // True when the selected ENVIRONMENT reaches `target` in the promotion chain.
 def runsUpTo(String target) {
     def chain = ['dev', 'QA', 'stage', 'Prod']
-    return chain.indexOf(params.ENVIRONMENT ?: 'QA') >= chain.indexOf(target)
+    return chain.indexOf(params.ENVIRONMENT ?: 'Prod') >= chain.indexOf(target)
 }
 
 // Pass one command per call: on Windows npm/npx/mvn are .cmd files, and a bat
@@ -114,8 +115,8 @@ pipeline {
     parameters {
         choice(
             name: 'ENVIRONMENT',
-            choices: ['QA', 'dev', 'stage', 'Prod'],
-            description: 'Run up to environment: dev → QA → stage → Prod'
+            choices: ['Prod', 'stage', 'QA', 'dev'],
+            description: 'Run up to environment. Prod (default) runs the full pipeline: dev → QA → stage → Prod (with approval)'
         )
         choice(
             name: 'BROWSER',
@@ -263,38 +264,42 @@ pipeline {
 
         // ═════════════════════════════════════════════════
         // STAGE 6: DEPLOY PROD + SMOKE (with approval)
+        // Nested under one top-level stage because "Restart from Stage" only offers
+        // top-level stages: any restart into PROD goes back through the approval.
         // ═════════════════════════════════════════════════
-        stage('Approval for PROD') {
+        stage('PROD') {
             when { expression { runsUpTo('Prod') } }
-            steps {
-                input id: 'ProdApproval',
-                    message: 'Deploy to PROD?',
-                    ok: 'Yes, Deploy!',
-                    submitter: 'admin,naveen,princekurian'
-            }
-        }
+            stages {
+                stage('Approval for PROD') {
+                    steps {
+                        input id: 'ProdApproval',
+                            message: 'Deploy to PROD?',
+                            ok: 'Yes, Deploy!',
+                            submitter: 'admin,naveen,princekurian'
+                    }
+                }
 
-        stage('Deploy to PROD') {
-            when { expression { runsUpTo('Prod') } }
-            steps {
-                echo "========================================="
-                echo "  Deploying to PROD..."
-                echo "========================================="
-                echo "PROD deployment complete ✅"
-            }
-        }
+                stage('Deploy to PROD') {
+                    steps {
+                        echo "========================================="
+                        echo "  Deploying to PROD..."
+                        echo "========================================="
+                        echo "PROD deployment complete ✅"
+                    }
+                }
 
-        stage('PROD - Smoke Tests') {
-            when { expression { runsUpTo('Prod') } }
-            steps {
-                echo "========================================="
-                echo "  Running SMOKE @smoke on PROD"
-                echo "========================================="
-                runPlaywright('prod', 'prod-credentials', 'prod-base-url', '@smoke')
-            }
-            post {
-                always {
-                    publishReports('prod', 'PROD Smoke')
+                stage('PROD - Smoke Tests') {
+                    steps {
+                        echo "========================================="
+                        echo "  Running SMOKE @smoke on PROD"
+                        echo "========================================="
+                        runPlaywright('prod', 'prod-credentials', 'prod-base-url', '@smoke')
+                    }
+                    post {
+                        always {
+                            publishReports('prod', 'PROD Smoke')
+                        }
+                    }
                 }
             }
         }
