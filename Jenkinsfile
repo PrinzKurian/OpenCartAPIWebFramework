@@ -3,11 +3,104 @@
 // Playwright TypeScript Framework
 // Naveen Automation Labs
 // ═══════════════════════════════════════════════════════════════
-// Reports per stage (3 reports × 4 envs = 12 total):
-//   1. PW HTML Report    → reports-{env}/html/
+// Tests run from THIS repo (PrinzKurian/OpenCartAPIWebFramework),
+// which the job checks out into the workspace root.
+//
+// ENVIRONMENT = "run up to environment" (same gate as .github/workflows/e2e.yml):
+//   dev   → Build → DEV
+//   QA    → Build → DEV → QA
+//   stage → Build → DEV → QA → STAGE
+//   Prod  → Build → DEV → QA → STAGE → PROD (manual approval)
+// A failed stage skips every stage after it.
+//
+// Reports per test stage:
+//   1. PW HTML Report    → reports/html-report/
 //   2. Allure Report     → reports-{env}/allure/
-//   3. ReportingLabs     → reports-{env}/reportinglabs/
+//   3. ReportingLabs     → reporting-labs/ (published only when the project produces it)
+//
+// Works on Linux/macOS agents (sh) and Windows agents (bat).
 // ═══════════════════════════════════════════════════════════════
+
+// True when the selected ENVIRONMENT reaches `target` in the promotion chain.
+def runsUpTo(String target) {
+    def chain = ['dev', 'QA', 'stage', 'Prod']
+    return chain.indexOf(params.ENVIRONMENT ?: 'QA') >= chain.indexOf(target)
+}
+
+// Pass one command per call: on Windows npm/npx/mvn are .cmd files, and a bat
+// script that runs one without `call` never returns to its next line.
+def runCmd(String cmd) {
+    if (isUnix()) {
+        sh cmd
+    } else {
+        bat cmd
+    }
+}
+
+def installPlaywrightBrowsers() {
+    // --with-deps installs Linux system packages; Windows agents don't need it.
+    runCmd(isUnix() ? 'npx playwright install --with-deps chromium' : 'npx playwright install chromium')
+}
+
+// Secrets reach the tests as env vars from Jenkins credentials:
+// config/.env.* is gitignored, so it does not exist in the workspace.
+def runPlaywright(String envName, String loginCredsId, String baseUrlCredsId, String grepTag) {
+    // Clear the previous stage's output so each stage reports only its own run.
+    dir('allure-results') { deleteDir() }
+    dir('reports') { deleteDir() }
+    dir('test-results') { deleteDir() }
+
+    withCredentials([
+        usernamePassword(credentialsId: loginCredsId,
+            usernameVariable: 'APP_USERNAME', passwordVariable: 'APP_PASSWORD'),
+        string(credentialsId: baseUrlCredsId, variable: 'BASE_URL'),
+        string(credentialsId: 'api-base-url', variable: 'API_BASE_URL'),
+        string(credentialsId: 'api-token', variable: 'API_TOKEN'),
+        string(credentialsId: 'oauth_client_id', variable: 'OAUTH_CLIENT_ID'),
+        string(credentialsId: 'OAUTH_CLIENT_SECRET', variable: 'OAUTH_CLIENT_SECRET'),
+        string(credentialsId: 'GRANT_TYPE', variable: 'GRANT_TYPE')
+    ]) {
+        withEnv(["ENV=${envName}"]) {
+            def grepArg = grepTag ? " --grep \"${grepTag}\"" : ''
+            runCmd("npx playwright test --project=chromium${grepArg}")
+        }
+    }
+}
+
+def publishReports(String envName, String label) {
+    def allureDir = "reports-${envName}/allure"
+    if (fileExists('allure-results')) {
+        // Uses the project's pinned allure-commandline (devDependency); Java comes from the jdk tool.
+        catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS', message: 'Allure report generation failed') {
+            runCmd("npx allure generate allure-results --clean -o ${allureDir}")
+        }
+    }
+    publishHTML(target: [
+        reportName: "${label} - PW HTML Report",
+        reportDir: 'reports/html-report',
+        reportFiles: 'index.html',
+        keepAll: true,
+        alwaysLinkToLastBuild: true,
+        allowMissing: true
+    ])
+    publishHTML(target: [
+        reportName: "${label} - Allure Report",
+        reportDir: allureDir,
+        reportFiles: 'index.html',
+        keepAll: true,
+        alwaysLinkToLastBuild: true,
+        allowMissing: true
+    ])
+    if (fileExists('reporting-labs/index.html')) {
+        publishHTML(target: [
+            reportName: "${label} - ReportingLabs Report",
+            reportDir: 'reporting-labs',
+            reportFiles: 'index.html',
+            keepAll: true,
+            alwaysLinkToLastBuild: true
+        ])
+    }
+}
 
 pipeline {
     agent any
@@ -15,15 +108,14 @@ pipeline {
     tools {
         nodejs 'NodeJS-24'
         maven 'Maven-3.9'
-        jdk 'JDK-17'
-        allure 'Allure'
+        jdk 'JDK-21'
     }
 
     parameters {
         choice(
             name: 'ENVIRONMENT',
             choices: ['QA', 'dev', 'stage', 'Prod'],
-            description: 'Select environment to run tests'
+            description: 'Run up to environment: dev → QA → stage → Prod'
         )
         choice(
             name: 'BROWSER',
@@ -39,6 +131,8 @@ pipeline {
 
     environment {
         SLACK_CHANNEL = '#all-pwtesting'
+        // playwright.config.ts runs headless, with retries and forbidOnly, only when CI is set.
+        CI = 'true'
     }
 
     options {
@@ -61,7 +155,7 @@ pipeline {
                 dir('dev-app') {
                     git url: 'https://github.com/jglick/simple-maven-project-with-tests.git',
                         branch: 'master'
-                    sh 'mvn clean install -Dmaven.test.failure.ignore=true'
+                    runCmd('mvn clean install -Dmaven.test.failure.ignore=true')
                 }
             }
             post {
@@ -79,12 +173,8 @@ pipeline {
                 echo "========================================="
                 echo "  Installing Playwright Dependencies"
                 echo "========================================="
-                dir('qa-tests') {
-                    git url: 'https://github.com/naveenanimation20/OpenCartWebAPIFramework.git',
-                        branch: 'main'
-                    sh 'npm ci'
-                    sh 'npx playwright install --with-deps chromium'
-                }
+                runCmd('npm ci')
+                installPlaywrightBrowsers()
             }
         }
 
@@ -105,59 +195,11 @@ pipeline {
                 echo "========================================="
                 echo "  Running SANITY @smoke on DEV"
                 echo "========================================="
-                dir('qa-tests') {
-                    sh 'rm -rf allure-results reports reporting-labs'
-                    withCredentials([
-                        usernamePassword(credentialsId: 'dev-credentials',
-                            usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD'),
-                        string(credentialsId: 'api-token', variable: 'API_TOKEN'),
-                        string(credentialsId: 'oauth-client-id', variable: 'OAUTH_CLIENT_ID'),
-                        string(credentialsId: 'oauth-client-secret', variable: 'OAUTH_CLIENT_SECRET'),
-                        string(credentialsId: 'dev-base-url', variable: 'BASE_URL'),
-                        string(credentialsId: 'api-base-url', variable: 'API_BASE_URL')
-                    ]) {
-                        sh '''
-                            ENV=dev \
-                            BASE_URL=$BASE_URL \
-                            USERNAME=$USERNAME \
-                            PASSWORD=$PASSWORD \
-                            API_BASE_URL=$API_BASE_URL \
-                            API_TOKEN=$API_TOKEN \
-                            OAUTH_CLIENT_ID=$OAUTH_CLIENT_ID \
-                            OAUTH_CLIENT_SECRET=$OAUTH_CLIENT_SECRET \
-                            GRANT_TYPE=client_credentials \
-                            npx playwright test --project=chromium --grep @smoke
-                        '''
-                    }
-                }
+                runPlaywright('dev', 'dev-credentials', 'dev-base-url', '@smoke')
             }
             post {
                 always {
-                    sh 'mkdir -p reports-dev/html reports-dev/allure reports-dev/reportinglabs'
-                    sh 'cp -r qa-tests/reports/html-report/* reports-dev/html/ || true'
-                    sh 'allure generate qa-tests/allure-results --clean -o reports-dev/allure || true'
-                    sh 'cp -r qa-tests/reporting-labs/* reports-dev/reportinglabs/ || true'
-                    publishHTML(target: [
-                        reportName: 'DEV Sanity - PW HTML Report',
-                        reportDir: 'reports-dev/html',
-                        reportFiles: 'index.html',
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true
-                    ])
-                    publishHTML(target: [
-                        reportName: 'DEV Sanity - Allure Report',
-                        reportDir: 'reports-dev/allure',
-                        reportFiles: 'index.html',
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true
-                    ])
-                    publishHTML(target: [
-                        reportName: 'DEV Sanity - ReportingLabs Report',
-                        reportDir: 'reports-dev/reportinglabs',
-                        reportFiles: 'index.html',
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true
-                    ])
+                    publishReports('dev', 'DEV Sanity')
                 }
             }
         }
@@ -166,6 +208,7 @@ pipeline {
         // STAGE 4: DEPLOY QA + REGRESSION
         // ═════════════════════════════════════════════════
         stage('Deploy to QA') {
+            when { expression { runsUpTo('QA') } }
             steps {
                 echo "========================================="
                 echo "  Deploying to QA..."
@@ -175,63 +218,16 @@ pipeline {
         }
 
         stage('QA - Regression Tests') {
+            when { expression { runsUpTo('QA') } }
             steps {
                 echo "========================================="
                 echo "  Running REGRESSION (all tests) on QA"
                 echo "========================================="
-                dir('qa-tests') {
-                    sh 'rm -rf allure-results reports reporting-labs'
-                    withCredentials([
-                        usernamePassword(credentialsId: 'qa-credentials',
-                            usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD'),
-                        string(credentialsId: 'api-token', variable: 'API_TOKEN'),
-                        string(credentialsId: 'oauth-client-id', variable: 'OAUTH_CLIENT_ID'),
-                        string(credentialsId: 'oauth-client-secret', variable: 'OAUTH_CLIENT_SECRET'),
-                        string(credentialsId: 'qa-base-url', variable: 'BASE_URL'),
-                        string(credentialsId: 'api-base-url', variable: 'API_BASE_URL')
-                    ]) {
-                        sh '''
-                            ENV=qa \
-                            BASE_URL=$BASE_URL \
-                            USERNAME=$USERNAME \
-                            PASSWORD=$PASSWORD \
-                            API_BASE_URL=$API_BASE_URL \
-                            API_TOKEN=$API_TOKEN \
-                            OAUTH_CLIENT_ID=$OAUTH_CLIENT_ID \
-                            OAUTH_CLIENT_SECRET=$OAUTH_CLIENT_SECRET \
-                            GRANT_TYPE=client_credentials \
-                            npx playwright test --project=chromium
-                        '''
-                    }
-                }
+                runPlaywright('qa', 'qa-credentials', 'qa-base-url', null)
             }
             post {
                 always {
-                    sh 'mkdir -p reports-qa/html reports-qa/allure reports-qa/reportinglabs'
-                    sh 'cp -r qa-tests/reports/html-report/* reports-qa/html/ || true'
-                    sh 'allure generate qa-tests/allure-results --clean -o reports-qa/allure || true'
-                    sh 'cp -r qa-tests/reporting-labs/* reports-qa/reportinglabs/ || true'
-                    publishHTML(target: [
-                        reportName: 'QA Regression - PW HTML Report',
-                        reportDir: 'reports-qa/html',
-                        reportFiles: 'index.html',
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true
-                    ])
-                    publishHTML(target: [
-                        reportName: 'QA Regression - Allure Report',
-                        reportDir: 'reports-qa/allure',
-                        reportFiles: 'index.html',
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true
-                    ])
-                    publishHTML(target: [
-                        reportName: 'QA Regression - ReportingLabs Report',
-                        reportDir: 'reports-qa/reportinglabs',
-                        reportFiles: 'index.html',
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true
-                    ])
+                    publishReports('qa', 'QA Regression')
                 }
             }
         }
@@ -240,6 +236,7 @@ pipeline {
         // STAGE 5: DEPLOY STAGE + SANITY
         // ═════════════════════════════════════════════════
         stage('Deploy to STAGE') {
+            when { expression { runsUpTo('stage') } }
             steps {
                 echo "========================================="
                 echo "  Deploying to STAGE..."
@@ -249,63 +246,17 @@ pipeline {
         }
 
         stage('STAGE - Sanity Tests') {
+            when { expression { runsUpTo('stage') } }
             steps {
                 echo "========================================="
                 echo "  Running SANITY @smoke on STAGE"
                 echo "========================================="
-                dir('qa-tests') {
-                    sh 'rm -rf allure-results reports reporting-labs'
-                    withCredentials([
-                        usernamePassword(credentialsId: 'stage-credentials',
-                            usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD'),
-                        string(credentialsId: 'api-token', variable: 'API_TOKEN'),
-                        string(credentialsId: 'oauth-client-id', variable: 'OAUTH_CLIENT_ID'),
-                        string(credentialsId: 'oauth-client-secret', variable: 'OAUTH_CLIENT_SECRET'),
-                        string(credentialsId: 'stage-base-url', variable: 'BASE_URL'),
-                        string(credentialsId: 'api-base-url', variable: 'API_BASE_URL')
-                    ]) {
-                        sh '''
-                            ENV=stage \
-                            BASE_URL=$BASE_URL \
-                            USERNAME=$USERNAME \
-                            PASSWORD=$PASSWORD \
-                            API_BASE_URL=$API_BASE_URL \
-                            API_TOKEN=$API_TOKEN \
-                            OAUTH_CLIENT_ID=$OAUTH_CLIENT_ID \
-                            OAUTH_CLIENT_SECRET=$OAUTH_CLIENT_SECRET \
-                            GRANT_TYPE=client_credentials \
-                            npx playwright test --project=chromium --grep @smoke
-                        '''
-                    }
-                }
+                // The Jenkins credential is saved with the ID 'stage-base-ur' (missing the final 'l').
+                runPlaywright('stage', 'stage-credentials', 'stage-base-ur', '@smoke')
             }
             post {
                 always {
-                    sh 'mkdir -p reports-stage/html reports-stage/allure reports-stage/reportinglabs'
-                    sh 'cp -r qa-tests/reports/html-report/* reports-stage/html/ || true'
-                    sh 'allure generate qa-tests/allure-results --clean -o reports-stage/allure || true'
-                    sh 'cp -r qa-tests/reporting-labs/* reports-stage/reportinglabs/ || true'
-                    publishHTML(target: [
-                        reportName: 'STAGE Sanity - PW HTML Report',
-                        reportDir: 'reports-stage/html',
-                        reportFiles: 'index.html',
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true
-                    ])
-                    publishHTML(target: [
-                        reportName: 'STAGE Sanity - Allure Report',
-                        reportDir: 'reports-stage/allure',
-                        reportFiles: 'index.html',
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true
-                    ])
-                    publishHTML(target: [
-                        reportName: 'STAGE Sanity - ReportingLabs Report',
-                        reportDir: 'reports-stage/reportinglabs',
-                        reportFiles: 'index.html',
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true
-                    ])
+                    publishReports('stage', 'STAGE Sanity')
                 }
             }
         }
@@ -314,14 +265,17 @@ pipeline {
         // STAGE 6: DEPLOY PROD + SMOKE (with approval)
         // ═════════════════════════════════════════════════
         stage('Approval for PROD') {
+            when { expression { runsUpTo('Prod') } }
             steps {
-                input message: 'Deploy to PROD?',
+                input id: 'ProdApproval',
+                    message: 'Deploy to PROD?',
                     ok: 'Yes, Deploy!',
-                    submitter: 'admin,naveen'
+                    submitter: 'admin,naveen,princekurian'
             }
         }
 
         stage('Deploy to PROD') {
+            when { expression { runsUpTo('Prod') } }
             steps {
                 echo "========================================="
                 echo "  Deploying to PROD..."
@@ -331,63 +285,16 @@ pipeline {
         }
 
         stage('PROD - Smoke Tests') {
+            when { expression { runsUpTo('Prod') } }
             steps {
                 echo "========================================="
                 echo "  Running SMOKE @smoke on PROD"
                 echo "========================================="
-                dir('qa-tests') {
-                    sh 'rm -rf allure-results reports reporting-labs'
-                    withCredentials([
-                        usernamePassword(credentialsId: 'prod-credentials',
-                            usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD'),
-                        string(credentialsId: 'api-token', variable: 'API_TOKEN'),
-                        string(credentialsId: 'oauth-client-id', variable: 'OAUTH_CLIENT_ID'),
-                        string(credentialsId: 'oauth-client-secret', variable: 'OAUTH_CLIENT_SECRET'),
-                        string(credentialsId: 'prod-base-url', variable: 'BASE_URL'),
-                        string(credentialsId: 'api-base-url', variable: 'API_BASE_URL')
-                    ]) {
-                        sh '''
-                            ENV=prod \
-                            BASE_URL=$BASE_URL \
-                            USERNAME=$USERNAME \
-                            PASSWORD=$PASSWORD \
-                            API_BASE_URL=$API_BASE_URL \
-                            API_TOKEN=$API_TOKEN \
-                            OAUTH_CLIENT_ID=$OAUTH_CLIENT_ID \
-                            OAUTH_CLIENT_SECRET=$OAUTH_CLIENT_SECRET \
-                            GRANT_TYPE=client_credentials \
-                            npx playwright test --project=chromium --grep @smoke
-                        '''
-                    }
-                }
+                runPlaywright('prod', 'prod-credentials', 'prod-base-url', '@smoke')
             }
             post {
                 always {
-                    sh 'mkdir -p reports-prod/html reports-prod/allure reports-prod/reportinglabs'
-                    sh 'cp -r qa-tests/reports/html-report/* reports-prod/html/ || true'
-                    sh 'allure generate qa-tests/allure-results --clean -o reports-prod/allure || true'
-                    sh 'cp -r qa-tests/reporting-labs/* reports-prod/reportinglabs/ || true'
-                    publishHTML(target: [
-                        reportName: 'PROD Smoke - PW HTML Report',
-                        reportDir: 'reports-prod/html',
-                        reportFiles: 'index.html',
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true
-                    ])
-                    publishHTML(target: [
-                        reportName: 'PROD Smoke - Allure Report',
-                        reportDir: 'reports-prod/allure',
-                        reportFiles: 'index.html',
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true
-                    ])
-                    publishHTML(target: [
-                        reportName: 'PROD Smoke - ReportingLabs Report',
-                        reportDir: 'reports-prod/reportinglabs',
-                        reportFiles: 'index.html',
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true
-                    ])
+                    publishReports('prod', 'PROD Smoke')
                 }
             }
         }
@@ -412,7 +319,7 @@ pipeline {
 
 *Overall: ${statusEmoji} ${buildStatus}*
 *Environment:* `${params.ENVIRONMENT}`
-*Branch:* `${env.BRANCH_NAME ?: 'main'}`
+*Branch:* `${env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'master'}`
 *Build:* #${env.BUILD_NUMBER}
 *Duration:* ${currentBuild.durationString.replace(' and counting', '')}
 
@@ -421,9 +328,9 @@ pipeline {
                     """
                 )
 
-                // Email Notification
+                // Email Notification: goes to the user who triggered the build (Jenkins profile email)
                 emailext(
-                    to: 'naveenanimation20@gmail.com,training@naveenautomationlabs.com',
+                    recipientProviders: [requestor()],
                     subject: "🎭 CI/CD Pipeline — ${statusEmoji} ${buildStatus} — Build #${env.BUILD_NUMBER}",
                     mimeType: 'text/html',
                     body: """
@@ -446,8 +353,8 @@ pipeline {
                                     </table>
                                 </div>
                                 <div style="background: #f8f9fa; padding: 20px 24px; border-top: 1px solid #eee;">
-                                    <h3 style="margin: 0 0 12px;">📊 Reports (12 reports per build)</h3>
-                                    <p style="color: #666; font-size: 13px; margin: 0 0 12px;">Each stage publishes 3 reports: PW HTML + Allure + ReportingLabs</p>
+                                    <h3 style="margin: 0 0 12px;">📊 Reports (3 per test stage)</h3>
+                                    <p style="color: #666; font-size: 13px; margin: 0 0 12px;">Each test stage publishes PW HTML + Allure (+ ReportingLabs when present)</p>
                                     <p style="color: #666; font-size: 13px; margin: 0 0 12px;">Click below to open Jenkins build page → Reports in sidebar</p>
                                     <a href="${env.BUILD_URL}" style="display: inline-block; padding: 10px 20px; background: #1a1a2e; color: white; text-decoration: none; border-radius: 6px; margin: 4px;">📁 Open Jenkins Build</a>
                                     <a href="${env.BUILD_URL}console" style="display: inline-block; padding: 10px 20px; background: #6c757d; color: white; text-decoration: none; border-radius: 6px; margin: 4px;">🔍 Console Logs</a>
