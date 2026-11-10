@@ -10,3 +10,7 @@ config/.env.*
 !config/.env.example
 dist
 *.log
+blob-report
+allure-shard*
+blob-shard*
+reports-shard*

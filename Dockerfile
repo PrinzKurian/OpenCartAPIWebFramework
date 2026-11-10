@@ -1,5 +1,7 @@
 
-FROM mcr.microsoft.com/playwright:v1.60.0
+# Must match the @playwright/test version in package-lock.json, otherwise the
+# browsers baked into the image won't match what the test runner expects.
+FROM mcr.microsoft.com/playwright:v1.64.1-noble
 
 WORKDIR /app
 
