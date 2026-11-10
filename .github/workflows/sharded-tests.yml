@@ -24,10 +24,10 @@ jobs:
     environment: QA
 
     steps:
+      # This repo (not a fork source): its package-lock pins Playwright 1.64+, which
+      # knows Ubuntu 26.04 — the image ubuntu-latest moved to in Oct 2026
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          repository: naveenanimation20/OpenCartWebAPIFramework
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -47,8 +47,8 @@ jobs:
           ENV: qa
           TEST_ENV: qa                     # the "env" chip in the reportingLabs header (reporting-labs.config.ts)
           BASE_URL: ${{ secrets.BASE_URL }}
-          USERNAME: ${{ secrets.USERNAME }}
-          PASSWORD: ${{ secrets.PASSWORD }}
+          APP_USERNAME: ${{ secrets.APP_USERNAME }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
           OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
@@ -97,10 +97,9 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
+      # Same repo as the shards, so merge-reports runs the same Playwright version that wrote the blobs
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          repository: naveenanimation20/OpenCartWebAPIFramework
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -130,16 +129,20 @@ jobs:
           retention-days: 30
 
       # ─── MERGE ALLURE REPORT ───────────────────────────
+      # if: always() so the Allure report is still built when the PW HTML merge above fails
       - name: Install Allure
+        if: always()
         run: npm install -g allure-commandline
 
       - name: Download all Allure results
+        if: always()
         uses: actions/download-artifact@v4
         with:
           path: all-allure-results
           pattern: allure-results-shard-*
 
       - name: Combine Allure results into single folder
+        if: always()
         run: |
           mkdir -p combined-allure-results
           for dir in all-allure-results/allure-results-shard-*/; do
@@ -149,9 +152,11 @@ jobs:
           ls combined-allure-results/ | wc -l
 
       - name: Generate merged Allure report
+        if: always()
         run: allure generate combined-allure-results --clean -o merged-allure-report
 
       - name: Upload merged Allure report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: merged-allure-report
@@ -170,7 +175,14 @@ jobs:
       - name: Merge reportingLabs report
         if: always()
         # @latest: one Timeline row per worker of every shard (0.6.14+), whatever version package-lock.json has
-        run: npx --yes reporting-labs@latest merge ./all-reporting-labs -o merged-reporting-labs
+        # Skipped (not failed) while the shards produce no reportingLabs output — this project has no
+        # reporting-labs reporter in playwright.config.ts yet; the merge starts working once one is added
+        run: |
+          if ! ls all-reporting-labs/*/report.json >/dev/null 2>&1; then
+            echo "::notice::No reportingLabs shard reports found - skipping the reportingLabs merge"
+            exit 0
+          fi
+          npx --yes reporting-labs@latest merge ./all-reporting-labs -o merged-reporting-labs
 
       - name: Upload merged reportingLabs report
         if: always()
@@ -192,7 +204,7 @@ jobs:
       cancel-in-progress: false
     env:
       RUN_DIR: pages-deploy/runs/${{ github.run_id }}
-      REPORT_URL: https://naveenanimation20.github.io/OpenCartWebAPIFramework/runs/${{ github.run_id }}
+      REPORT_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/runs/${{ github.run_id }}
     steps:
       - name: Download merged reports
         uses: actions/download-artifact@v4
