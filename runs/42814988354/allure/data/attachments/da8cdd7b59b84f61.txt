@@ -1,0 +1,12 @@
+user creds: pwbatchtest@open.com : pw123
+search key: macbook
+Actual Product Details:  Map(8) {
+  'ProductHeader' => 'MacBook Air',
+  'ProductImages' => 4,
+  'Brand' => 'Apple',
+  'Product Code' => 'Product 17',
+  'Reward Points' => '700',
+  'Availability' => 'Out Of Stock',
+  'ProductPrice' => '$1,202.00',
+  'ExTaxPrice' => '$1,000.00'
+}

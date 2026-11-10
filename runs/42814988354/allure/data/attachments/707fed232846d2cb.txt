@@ -1,0 +1,74 @@
+[
+  {
+    id: 8706999,
+    name: 'schema test',
+    email: 'automation_1794313306541_74493@open.com',
+    gender: 'male',
+    status: 'active'
+  },
+  {
+    id: 8706997,
+    name: 'prince API updated',
+    email: 'automation_1794313305040_29540@open.com',
+    gender: 'male',
+    status: 'inactive'
+  },
+  {
+    id: 8706996,
+    name: 'prince API',
+    email: 'automation_1794313304475_10901@open.com',
+    gender: 'male',
+    status: 'active'
+  },
+  {
+    id: 8706987,
+    name: 'uday',
+    email: 'automation_1794311935907@open.com',
+    gender: 'male',
+    status: 'active'
+  },
+  {
+    id: 8706984,
+    name: 'schema test',
+    email: 'automation_1794311931608_94788@open.com',
+    gender: 'male',
+    status: 'active'
+  },
+  {
+    id: 8706983,
+    name: 'prince API updated',
+    email: 'automation_1794311929248_67378@open.com',
+    gender: 'male',
+    status: 'inactive'
+  },
+  {
+    id: 8706982,
+    name: 'prince API',
+    email: 'automation_1794311928542_26620@open.com',
+    gender: 'male',
+    status: 'active'
+  },
+  {
+    id: 8706979,
+    name: 'uday',
+    email: 'automation_1794311573233@open.com',
+    gender: 'male',
+    status: 'active'
+  },
+  {
+    id: 8706978,
+    name: 'schema test',
+    email: 'automation_1794311569594_93854@open.com',
+    gender: 'male',
+    status: 'active'
+  },
+  {
+    id: 8706975,
+    name: 'prince API updated',
+    email: 'automation_1794311568025_7213@open.com',
+    gender: 'male',
+    status: 'inactive'
+  }
+]
+200
+OK

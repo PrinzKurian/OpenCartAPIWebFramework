@@ -1,0 +1,11 @@
+user creds: pwbatchtest@open.com : pw123
+search key: imac
+Actual Product Details:  Map(7) {
+  'ProductHeader' => 'iMac',
+  'ProductImages' => 3,
+  'Brand' => 'Apple',
+  'Product Code' => 'Product 14',
+  'Availability' => 'Out Of Stock',
+  'ProductPrice' => '$122.00',
+  'ExTaxPrice' => '$100.00'
+}
